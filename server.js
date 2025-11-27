@@ -16,13 +16,13 @@ const app = express();
 app.use(helmet({
   // Solo permitir que el sitio se cargue en un iFrame en sus propias páginas
   frameguard: { action: 'sameorigin' },
-  
+
   // No permitir la precarga de DNS
   dnsPrefetchControl: { allow: false },
-  
+
   // Permitir que el sitio envíe el referente únicamente a sus propias páginas
   referrerPolicy: { policy: 'same-origin' },
-  
+
   // Otras configuraciones de seguridad
   contentSecurityPolicy: false // Deshabilitado para FCC testing
 }));
@@ -65,17 +65,16 @@ fccTestingRoutes(app);
 
 // Configuración de conexión a base de datos
 const MONGO_URI = process.env.DB || process.env.MONGO_URI || 'mongodb://localhost:27017/anonymous_messageboard';
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 // Función para crear una colección en memoria si no hay MongoDB disponible
 function createMemoryStorage() {
-  const threads = []; // Almacén central cerrado para evitar problemas de contexto
-  
+  const threads = [];
+
   const memoryDB = {
     collection: function(name) {
       return {
         insertOne: async (doc) => {
-          // Crear un ObjectId-like compatible
           if (!doc._id) {
             const timestamp = Math.floor(new Date().getTime() / 1000).toString(16);
             const randomHex = Math.random().toString(16).substr(2, 16);
@@ -85,7 +84,7 @@ function createMemoryStorage() {
           threads.push({ ...doc });
           return { insertedId: doc._id };
         },
-        
+
         find: (query = {}, options = {}) => ({
           sort: (sortOptions) => ({
             limit: (limitNum) => ({
@@ -94,18 +93,15 @@ function createMemoryStorage() {
                   if (query.board && t.board !== query.board) return false;
                   return true;
                 });
-                
-                // Aplicar sort
+
                 if (sortOptions && sortOptions.bumped_on === -1) {
                   filtered.sort((a, b) => new Date(b.bumped_on) - new Date(a.bumped_on));
                 }
-                
-                // Aplicar limit
+
                 if (limitNum) {
                   filtered = filtered.slice(0, limitNum);
                 }
-                
-                // Aplicar projection
+
                 if (options.projection) {
                   filtered = filtered.map(item => {
                     const projected = { ...item };
@@ -117,20 +113,20 @@ function createMemoryStorage() {
                     return projected;
                   });
                 }
-                
+
                 return filtered;
               }
             })
           })
         }),
-        
+
         findOne: async (query, options = {}) => {
           let thread = threads.find(t => {
             if (query._id && t._id.toString() !== query._id.toString()) return false;
             if (query.board && t.board !== query.board) return false;
             return true;
           });
-          
+
           if (thread && options.projection) {
             thread = { ...thread };
             Object.keys(options.projection).forEach(key => {
@@ -139,10 +135,10 @@ function createMemoryStorage() {
               }
             });
           }
-          
+
           return thread;
         },
-        
+
         updateOne: async (query, update) => {
           const threadIndex = threads.findIndex(t => {
             if (query._id && t._id.toString() !== query._id.toString()) return false;
@@ -153,21 +149,18 @@ function createMemoryStorage() {
             }
             return true;
           });
-          
+
           if (threadIndex === -1) return { matchedCount: 0 };
-          
+
           const thread = threads[threadIndex];
-          
-          // Manejar $set
+
           if (update.$set) {
             if (update.$set['replies.$.reported']) {
-              // Actualización posicional para respuestas
               const replyIndex = thread.replies.findIndex(r => r._id.toString() === query['replies._id'].toString());
               if (replyIndex !== -1) {
                 thread.replies[replyIndex].reported = true;
               }
             } else if (update.$set['replies.$.text']) {
-              // Actualización posicional para texto de respuesta
               const replyIndex = thread.replies.findIndex(r => r._id.toString() === query['replies._id'].toString());
               if (replyIndex !== -1) {
                 thread.replies[replyIndex].text = update.$set['replies.$.text'];
@@ -176,25 +169,24 @@ function createMemoryStorage() {
               Object.assign(thread, update.$set);
             }
           }
-          
-          // Manejar $push
+
           if (update.$push) {
             Object.keys(update.$push).forEach(key => {
               if (!thread[key]) thread[key] = [];
               thread[key].push(update.$push[key]);
             });
           }
-          
+
           return { matchedCount: 1 };
         },
-        
+
         deleteOne: async (query) => {
           const index = threads.findIndex(t => {
             if (query._id && t._id.toString() !== query._id.toString()) return false;
             if (query.board && t.board !== query.board) return false;
             return true;
           });
-          
+
           if (index > -1) {
             threads.splice(index, 1);
             return { deletedCount: 1 };
@@ -215,21 +207,21 @@ async function startServer() {
     const db = client.db();
     app.locals.db = db;
     console.log('Connected to MongoDB successfully');
-    
-    // Routing for API (se monta después de conectar a la DB)
+
+    // ✅ Montar rutas API
     apiRoutes(app);
-    
+
     startExpressServer();
-    
+
   } catch (err) {
     console.log('MongoDB connection failed, using memory storage for development:', err.message);
-    
+
     // Usar almacenamiento en memoria
     app.locals.db = createMemoryStorage();
-    
-    // Routing for API 
+
+    // ✅ Montar rutas API también aquí
     apiRoutes(app);
-    
+
     startExpressServer();
   }
 }
@@ -245,7 +237,7 @@ function startExpressServer() {
   // Start our server and tests!
   const listener = app.listen(PORT, '0.0.0.0', function () {
     console.log('Your app is listening on port ' + listener.address().port);
-    
+
     if (process.env.NODE_ENV === 'test') {
       console.log('Running Tests...');
       setTimeout(function () {
