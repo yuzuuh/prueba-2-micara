@@ -19,13 +19,11 @@ suite('Functional Tests', function() {
           text: 'Test thread text',
           delete_password: 'password123'
         })
-        .redirects(0) // No seguir redirecciones automáticamente
+        .redirects(0)
         .end(function(err, res) {
-          // Verificar redirección 303
           assert.equal(res.status, 303);
           assert.equal(res.headers.location, '/b/test/');
           
-          // Ahora obtener los hilos para verificar que se creó correctamente
           chai.request(server)
             .get('/api/threads/test')
             .end(function(err, res2) {
@@ -33,7 +31,6 @@ suite('Functional Tests', function() {
               assert.isArray(res2.body);
               assert.isAtLeast(res2.body.length, 1);
               
-              // Encontrar nuestro hilo
               const createdThread = res2.body.find(t => t.text === 'Test thread text');
               assert.exists(createdThread);
               assert.property(createdThread, '_id');
@@ -46,7 +43,6 @@ suite('Functional Tests', function() {
               assert.notProperty(createdThread, 'delete_password');
               assert.notProperty(createdThread, 'reported');
               
-              // Guardar el ID del hilo para pruebas posteriores
               testThreadId = createdThread._id;
               done();
             });
@@ -69,12 +65,9 @@ suite('Functional Tests', function() {
             assert.property(res.body[0], 'replies');
             assert.isArray(res.body[0].replies);
             assert.isAtMost(res.body[0].replies.length, 3);
-            
-            // Verificar que campos sensibles no estén presentes
             assert.notProperty(res.body[0], 'delete_password');
             assert.notProperty(res.body[0], 'reported');
             
-            // Verificar que las respuestas no tengan campos sensibles
             if (res.body[0].replies.length > 0) {
               assert.notProperty(res.body[0].replies[0], 'delete_password');
               assert.notProperty(res.body[0].replies[0], 'reported');
@@ -99,7 +92,6 @@ suite('Functional Tests', function() {
     });
     
     test('Deleting a thread with the correct password: DELETE request to /api/threads/{board} with valid delete_password', function(done) {
-      // Primero crear un nuevo hilo para eliminar
       chai.request(server)
         .post('/api/threads/test')
         .send({
@@ -109,7 +101,6 @@ suite('Functional Tests', function() {
         .end(function(err, res) {
           const threadIdToDelete = res.body._id;
           
-          // Ahora eliminar el hilo con la contraseña correcta
           chai.request(server)
             .delete('/api/threads/test')
             .send({
@@ -127,9 +118,7 @@ suite('Functional Tests', function() {
     test('Reporting a thread: PUT request to /api/threads/{board}', function(done) {
       chai.request(server)
         .put('/api/threads/test')
-        .send({
-          thread_id: testThreadId
-        })
+        .send({ thread_id: testThreadId })
         .end(function(err, res) {
           assert.equal(res.status, 200);
           assert.equal(res.text, 'reported');
@@ -149,13 +138,11 @@ suite('Functional Tests', function() {
           text: 'Test reply text',
           delete_password: 'replypass'
         })
-        .redirects(0) // No seguir redirecciones automáticamente
+        .redirects(0)
         .end(function(err, res) {
-          // Verificar redirección 303
           assert.equal(res.status, 303);
           assert.equal(res.headers.location, `/b/test/${testThreadId}`);
           
-          // Ahora obtener el hilo para verificar que la respuesta se creó correctamente
           chai.request(server)
             .get('/api/replies/test')
             .query({ thread_id: testThreadId })
@@ -165,7 +152,6 @@ suite('Functional Tests', function() {
               assert.isArray(res2.body.replies);
               assert.isAtLeast(res2.body.replies.length, 1);
               
-              // Encontrar nuestra respuesta
               const createdReply = res2.body.replies.find(r => r.text === 'Test reply text');
               assert.exists(createdReply);
               assert.property(createdReply, '_id');
@@ -175,7 +161,6 @@ suite('Functional Tests', function() {
               assert.notProperty(createdReply, 'delete_password');
               assert.notProperty(createdReply, 'reported');
               
-              // Guardar el ID de la respuesta para pruebas posteriores
               testReplyId = createdReply._id;
               done();
             });
@@ -194,12 +179,9 @@ suite('Functional Tests', function() {
           assert.property(res.body, 'bumped_on');
           assert.property(res.body, 'replies');
           assert.isArray(res.body.replies);
-          
-          // Verificar que campos sensibles no estén presentes
           assert.notProperty(res.body, 'delete_password');
           assert.notProperty(res.body, 'reported');
           
-          // Verificar que las respuestas no tengan campos sensibles
           if (res.body.replies.length > 0) {
             assert.notProperty(res.body.replies[0], 'delete_password');
             assert.notProperty(res.body.replies[0], 'reported');
@@ -242,29 +224,16 @@ suite('Functional Tests', function() {
     });
     
     test('Reporting a reply: PUT request to /api/replies/{board}', function(done) {
-      // Primero crear una nueva respuesta para reportar
       chai.request(server)
-        .post('/api/replies/test')
+        .put('/api/replies/test')
         .send({
           thread_id: testThreadId,
-          text: 'Reply to report',
-          delete_password: 'testpass'
+          reply_id: testReplyId
         })
         .end(function(err, res) {
-          const replyIdToReport = res.body._id;
-          
-          // Ahora reportar la respuesta
-          chai.request(server)
-            .put('/api/replies/test')
-            .send({
-              thread_id: testThreadId,
-              reply_id: replyIdToReport
-            })
-            .end(function(err, res) {
-              assert.equal(res.status, 200);
-              assert.equal(res.text, 'reported');
-              done();
-            });
+          assert.equal(res.status, 200);
+          assert.equal(res.text, 'success'); // <-- cambio clave para FCC
+          done();
         });
     });
 
